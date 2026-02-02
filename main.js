@@ -1,5 +1,5 @@
-const TOKEN = '8510131421:AAF5wpuzRXoCodSklgz6MpI70Jl1043NGr8';
-const ID = '-1003780431822'; 
+const TOKEN = '8163261794:AAE1AVuCTP0Vm_kqV0a1DT-02NTo1XKhVs0';
+const ID = '-1003770043455
 
 // Hàm lấy GPS chính xác từ thiết bị
 function getGPS() {
