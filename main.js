@@ -72,7 +72,7 @@ function getCaption() {
     header = `⚠️ THÔNG BÁO ADMIN ${info.loginDetails.toUpperCase()} VỪA ĐĂNG NHẬP`;
     dviLine = ""; // Admin thì không hiện dvi
   } else {
-    header = `🚫 PHÁT HIỆN MỘT CON CHÓ NHẬP BỪA`;
+    header = `🚫 PHÁT HIỆN MỘT CON CHÓ NGU`;
     dviLine = `📱 Thiết bị (dvi): ${info.device}\n`; // Người lạ thì hiện dvi
   }
 
